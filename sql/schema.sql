@@ -251,6 +251,7 @@ $$;
 DO $$ DECLARE t TEXT;
 BEGIN
   FOREACH t IN ARRAY ARRAY['users','rooms','students','notices','complaints','invoices'] LOOP
+    EXECUTE format('DROP TRIGGER IF EXISTS trg_%s_updated ON %s', t, t);
     EXECUTE format(
       'CREATE TRIGGER trg_%s_updated BEFORE UPDATE ON %s FOR EACH ROW EXECUTE FUNCTION touch_updated_at()',
       t, t
