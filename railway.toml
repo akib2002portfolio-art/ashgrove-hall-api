@@ -3,7 +3,7 @@ builder = "DOCKERFILE"
 dockerfilePath = "Dockerfile"
 
 [deploy]
-preDeployCommand = "node src/db/migrate.js && node src/db/seed.js"
+preDeployCommand = "node src/db/seed.js"
 startCommand = "node src/index.js"
 healthcheckPath = "/health"
 healthcheckTimeout = 60
