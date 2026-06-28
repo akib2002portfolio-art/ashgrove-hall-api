@@ -11,21 +11,57 @@ CREATE EXTENSION IF NOT EXISTS "citext";     -- case-insensitive email
 --  ENUM TYPES
 -- ─────────────────────────────────────────────────────────────
 
-CREATE TYPE user_role      AS ENUM ('admin', 'student', 'warden');
-CREATE TYPE room_status    AS ENUM ('available', 'full', 'reserved', 'maintenance');
-CREATE TYPE bed_status     AS ENUM ('vacant', 'occupied', 'reserved');
-CREATE TYPE notice_cat     AS ENUM ('General', 'Emergency', 'Maintenance', 'Holiday', 'Dining', 'Exam');
-CREATE TYPE complaint_prio AS ENUM ('low', 'medium', 'high', 'emergency');
-CREATE TYPE complaint_stat AS ENUM ('pending', 'assigned', 'in_progress', 'resolved', 'closed');
-CREATE TYPE fee_type       AS ENUM ('Seat Rent', 'Electric Bill', 'Internet Bill', 'Dining Bill', 'Laundry Bill', 'Maintenance Fee', 'Late Fee', 'Other');
-CREATE TYPE fee_status     AS ENUM ('pending', 'partial', 'paid', 'overdue', 'cancelled');
-CREATE TYPE visitor_status AS ENUM ('in', 'out', 'overstayed');
+DO $$ BEGIN
+  CREATE TYPE user_role AS ENUM ('admin', 'student', 'warden');
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;
+DO $$ BEGIN
+  CREATE TYPE room_status AS ENUM ('available', 'full', 'reserved', 'maintenance');
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;
+DO $$ BEGIN
+  CREATE TYPE bed_status AS ENUM ('vacant', 'occupied', 'reserved');
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;
+DO $$ BEGIN
+  CREATE TYPE notice_cat AS ENUM ('General', 'Emergency', 'Maintenance', 'Holiday', 'Dining', 'Exam');
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;
+DO $$ BEGIN
+  CREATE TYPE complaint_prio AS ENUM ('low', 'medium', 'high', 'emergency');
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;
+DO $$ BEGIN
+  CREATE TYPE complaint_stat AS ENUM ('pending', 'assigned', 'in_progress', 'resolved', 'closed');
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;
+DO $$ BEGIN
+  CREATE TYPE fee_type AS ENUM ('Seat Rent', 'Electric Bill', 'Internet Bill', 'Dining Bill', 'Laundry Bill', 'Maintenance Fee', 'Late Fee', 'Other');
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;
+DO $$ BEGIN
+  CREATE TYPE fee_status AS ENUM ('pending', 'partial', 'paid', 'overdue', 'cancelled');
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;
+DO $$ BEGIN
+  CREATE TYPE visitor_status AS ENUM ('in', 'out', 'overstayed');
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;
 
 -- ─────────────────────────────────────────────────────────────
 --  USERS  (admins + students share one table; role disambiguates)
 -- ─────────────────────────────────────────────────────────────
 
-CREATE TABLE users (
+CREATE TABLE IF NOT EXISTS users (
   id            UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
   email         CITEXT        NOT NULL UNIQUE,
   password_hash TEXT          NOT NULL,
@@ -39,7 +75,7 @@ CREATE TABLE users (
 );
 
 -- Refresh tokens (one-per-session; invalidated on logout/rotation)
-CREATE TABLE refresh_tokens (
+CREATE TABLE IF NOT EXISTS refresh_tokens (
   id          UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id     UUID        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   token_hash  TEXT        NOT NULL UNIQUE,   -- store hash, not raw token
@@ -52,7 +88,7 @@ CREATE TABLE refresh_tokens (
 --  ROOMS & BEDS
 -- ─────────────────────────────────────────────────────────────
 
-CREATE TABLE rooms (
+CREATE TABLE IF NOT EXISTS rooms (
   id           UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
   room_number  TEXT        NOT NULL UNIQUE,   -- e.g. "A-204"
   floor        TEXT,                           -- e.g. "2nd Floor"
@@ -64,7 +100,7 @@ CREATE TABLE rooms (
   updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE TABLE beds (
+CREATE TABLE IF NOT EXISTS beds (
   id           UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
   room_id      UUID        NOT NULL REFERENCES rooms(id) ON DELETE CASCADE,
   bed_label    TEXT        NOT NULL,           -- "A", "B", "C" etc.
@@ -77,7 +113,7 @@ CREATE TABLE beds (
 --  STUDENTS (profile layer on top of users)
 -- ─────────────────────────────────────────────────────────────
 
-CREATE TABLE students (
+CREATE TABLE IF NOT EXISTS students (
   id              UUID        PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
   student_id      TEXT        NOT NULL UNIQUE,  -- institutional ID
   room_id         UUID        REFERENCES rooms(id),
@@ -96,7 +132,7 @@ CREATE TABLE students (
 --  NOTICES
 -- ─────────────────────────────────────────────────────────────
 
-CREATE TABLE notices (
+CREATE TABLE IF NOT EXISTS notices (
   id          UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
   title       TEXT        NOT NULL,
   body        TEXT        NOT NULL,
@@ -113,7 +149,7 @@ CREATE TABLE notices (
 --  COMPLAINTS / MAINTENANCE REQUESTS
 -- ─────────────────────────────────────────────────────────────
 
-CREATE TABLE complaints (
+CREATE TABLE IF NOT EXISTS complaints (
   id              UUID            PRIMARY KEY DEFAULT gen_random_uuid(),
   student_id      UUID            NOT NULL REFERENCES users(id),
   room_id         UUID            REFERENCES rooms(id),
@@ -129,7 +165,7 @@ CREATE TABLE complaints (
 );
 
 -- Comment thread on complaints
-CREATE TABLE complaint_comments (
+CREATE TABLE IF NOT EXISTS complaint_comments (
   id           UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
   complaint_id UUID        NOT NULL REFERENCES complaints(id) ON DELETE CASCADE,
   author_id    UUID        NOT NULL REFERENCES users(id),
@@ -141,7 +177,7 @@ CREATE TABLE complaint_comments (
 --  FEES / INVOICES
 -- ─────────────────────────────────────────────────────────────
 
-CREATE TABLE invoices (
+CREATE TABLE IF NOT EXISTS invoices (
   id            UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
   invoice_no    TEXT        NOT NULL UNIQUE,  -- "INV-1042"
   student_id    UUID        NOT NULL REFERENCES users(id),
@@ -158,7 +194,7 @@ CREATE TABLE invoices (
 );
 
 -- Immutable payment ledger
-CREATE TABLE payments (
+CREATE TABLE IF NOT EXISTS payments (
   id            UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
   invoice_id    UUID          NOT NULL REFERENCES invoices(id),
   amount        NUMERIC(10,2) NOT NULL,
@@ -172,7 +208,7 @@ CREATE TABLE payments (
 --  VISITORS
 -- ─────────────────────────────────────────────────────────────
 
-CREATE TABLE visitors (
+CREATE TABLE IF NOT EXISTS visitors (
   id              UUID            PRIMARY KEY DEFAULT gen_random_uuid(),
   visitor_name    TEXT            NOT NULL,
   visitor_phone   TEXT,
@@ -192,16 +228,16 @@ CREATE TABLE visitors (
 --  INDEXES
 -- ─────────────────────────────────────────────────────────────
 
-CREATE INDEX idx_students_room      ON students(room_id);
-CREATE INDEX idx_complaints_student ON complaints(student_id);
-CREATE INDEX idx_complaints_status  ON complaints(status);
-CREATE INDEX idx_invoices_student   ON invoices(student_id);
-CREATE INDEX idx_invoices_status    ON invoices(status);
-CREATE INDEX idx_invoices_due_date  ON invoices(due_date);
-CREATE INDEX idx_visitors_student   ON visitors(student_id);
-CREATE INDEX idx_visitors_status    ON visitors(status);
-CREATE INDEX idx_notices_cat        ON notices(category);
-CREATE INDEX idx_refresh_tokens_user ON refresh_tokens(user_id);
+CREATE INDEX IF NOT EXISTS idx_students_room      ON students(room_id);
+CREATE INDEX IF NOT EXISTS idx_complaints_student ON complaints(student_id);
+CREATE INDEX IF NOT EXISTS idx_complaints_status  ON complaints(status);
+CREATE INDEX IF NOT EXISTS idx_invoices_student   ON invoices(student_id);
+CREATE INDEX IF NOT EXISTS idx_invoices_status    ON invoices(status);
+CREATE INDEX IF NOT EXISTS idx_invoices_due_date  ON invoices(due_date);
+CREATE INDEX IF NOT EXISTS idx_visitors_student   ON visitors(student_id);
+CREATE INDEX IF NOT EXISTS idx_visitors_status    ON visitors(status);
+CREATE INDEX IF NOT EXISTS idx_notices_cat        ON notices(category);
+CREATE INDEX IF NOT EXISTS idx_refresh_tokens_user ON refresh_tokens(user_id);
 
 -- ─────────────────────────────────────────────────────────────
 --  AUTO-UPDATE updated_at
