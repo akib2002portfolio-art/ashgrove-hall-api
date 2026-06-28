@@ -1,0 +1,60 @@
+version: "3.9"
+
+services:
+  # ── PostgreSQL ─────────────────────────────────────────────
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB:       hall_management
+      POSTGRES_USER:     hall_user
+      POSTGRES_PASSWORD: secret
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./sql/schema.sql:/docker-entrypoint-initdb.d/01_schema.sql   # auto-runs on first start
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hall_user -d hall_management"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # ── API ────────────────────────────────────────────────────
+  api:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      NODE_ENV:        development
+      PORT:            3000
+      DATABASE_URL:    postgresql://hall_user:secret@db:5432/hall_management
+      JWT_SECRET:      dev_jwt_secret_change_in_production
+      JWT_REFRESH_SECRET: dev_refresh_secret_change_in_production
+      FRONTEND_URL:    http://localhost:5173
+      VISITOR_MAX_HOURS: 2
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./src:/app/src          # hot-reload in dev (with nodemon)
+      - ./sql:/app/sql
+    command: >
+      sh -c "node src/db/migrate.js && node src/db/seed.js && node src/index.js"
+
+  # ── pgAdmin (optional GUI) ─────────────────────────────────
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    restart: unless-stopped
+    profiles: ["tools"]          # opt-in: docker compose --profile tools up
+    environment:
+      PGADMIN_DEFAULT_EMAIL:    admin@ashgrove.edu
+      PGADMIN_DEFAULT_PASSWORD: admin
+    ports:
+      - "5050:80"
+    depends_on:
+      - db
+
+volumes:
+  pgdata:

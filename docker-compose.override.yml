@@ -1,0 +1,14 @@
+version: "3.9"
+
+# Usage: docker compose up  (automatically merges this file in dev)
+# Override the base image command to use nodemon for hot-reload.
+
+services:
+  api:
+    build:
+      context: .
+      target: deps          # use the deps stage (includes devDependencies)
+    command: >
+      sh -c "node src/db/migrate.js && node src/db/seed.js && npx nodemon src/index.js"
+    environment:
+      NODE_ENV: development
